@@ -12,14 +12,20 @@ import (
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/tkanos/gonfig"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
-// Credentials which stores google ids.
-type Credentials struct {
-	Cid     string `json:"client_id"`
-	Csecret string `json:"client_secret"`
+// Setup which stores google ids and urls, scopes, and blablabla
+type Setup struct {
+	// Keep the vars defined on file at the beginning
+	Scopes      []string `json:"scopes" env:"SCOPES"`
+	UserURI     string   `json:"userinfo_uri" env:"USERINFO_URI"`
+	// Keep the vars defined by environment at the end of this struct
+	Cid         string   `json:"client_id" env:"CLIENT_ID"`
+	Csecret     string   `json:"client_secret" env:"CLIENT_SECRET"`
+	RedirectURL string   `json:"redirect_url" env:"REDIRECT_URL"`
 }
 
 // User is a retrieved and authentiacted user.
@@ -35,7 +41,7 @@ type User struct {
 	Gender        string `json:"gender"`
 }
 
-var cred Credentials
+var setup Setup
 var conf *oauth2.Config
 var state string
 var store = sessions.NewCookieStore([]byte("secret"))
@@ -47,25 +53,20 @@ func randToken() string {
 }
 
 func init() {
-	file, err := ioutil.ReadFile("./creds.json")
+	err := gonfig.GetConf("./config.json", &setup)
 	if err != nil {
-		log.Printf("File error: %v\n", err)
+		log.Printf("i cant load config: %v\n", err)
 		os.Exit(1)
 	}
-	log.Printf("File: %+v\n", string(file))
-	if err := json.Unmarshal(file, &cred); err != nil {
-		panic(err)
-	}
-	log.Printf("Json: %+v\n", cred)
+	log.Printf("Json: %+v\n", setup)
 
 	conf = &oauth2.Config{
-		ClientID:     cred.Cid,
-		ClientSecret: cred.Csecret,
-		RedirectURL:  "http://regress.yapo.cl:9090/auth",
-		Scopes: []string{
-			"profile",
-			// You have to select your own scope from here -> https://developers.google.com/identity/protocols/googlescopes#google_sign-in
-		},
+		ClientID:     setup.Cid,
+		ClientSecret: setup.Csecret,
+		RedirectURL:  setup.RedirectURL,
+		// You have to select your own scope from
+		// here -> https://developers.google.com/identity/protocols/googlescopes#google_sign-in
+		Scopes:   setup.Scopes,
 		Endpoint: google.Endpoint,
 	}
 }
@@ -96,14 +97,14 @@ func authHandler(c *gin.Context) {
 	}
 
 	client := conf.Client(oauth2.NoContext, tok)
-	email, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
+	email, err := client.Get(setup.UserURI)
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 	defer email.Body.Close()
 	data, _ := ioutil.ReadAll(email.Body)
-	log.Printf("BODY:%s\n", string(data))
+	log.Printf("DATA:%s\n", string(data))
 	user := User{}
 	if err := json.Unmarshal(data, &user); err != nil {
 		panic(err)

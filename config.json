@@ -1,0 +1,9 @@
+{
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "userinfo_uri": "https://www.googleapis.com/oauth2/v3/userinfo",
+    "scopes": [
+        "profile",
+        "email"
+    ]
+}
