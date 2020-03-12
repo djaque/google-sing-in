@@ -2,11 +2,13 @@
 
 This is an example of how to create a web with google sing in
 
-Is based on [Google sign in with Go](https://skarlso.github.io/2016/06/12/google-signin-with-go/) with some improvements.
+Is based on [Google sing in with Go](https://skarlso.github.io/2016/06/12/google-signin-with-go/) with some improvements.
 
-Use GIN framework
-Tkanos/Config
-golang.org/x/oauth2/google
+Use:
+
+- GIN framework
+- Tkanos/Config
+- golang.org/x/oauth2/google
 
 I build this using go mod and golang 1.13 on my mac.
 
