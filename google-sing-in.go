@@ -10,22 +10,24 @@ import (
 	"net/http"
 	"os"
 
+	googleAuthIDTokenVerifier "github.com/futurenda/google-auth-id-token-verifier"
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/tkanos/gonfig"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	goauth "google.golang.org/api/oauth2/v2"
 )
 
 // Setup which stores google ids and urls, scopes, and blablabla
 type Setup struct {
 	// Keep the vars defined on file at the beginning
-	Scopes      []string `json:"scopes" env:"SCOPES"`
-	UserURI     string   `json:"userinfo_uri" env:"USERINFO_URI"`
+	Scopes  []string `json:"scopes" env:"SCOPES"`
+	UserURI string   `json:"userinfo_uri" env:"USERINFO_URI"`
 	// Keep the vars defined by environment at the end of this struct
-	Cid         string   `json:"client_id" env:"CLIENT_ID"`
-	Csecret     string   `json:"client_secret" env:"CLIENT_SECRET"`
-	RedirectURL string   `json:"redirect_url" env:"REDIRECT_URL"`
+	Cid         string `json:"client_id" env:"CLIENT_ID"`
+	Csecret     string `json:"client_secret" env:"CLIENT_SECRET"`
+	RedirectURL string `json:"redirect_url" env:"REDIRECT_URL"`
 }
 
 // User is a retrieved and authentiacted user.
@@ -72,7 +74,7 @@ func init() {
 }
 
 func indexHandler(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.tmpl", gin.H{
+	c.HTML(http.StatusOK, "index.html", gin.H{
 		"title": "Login con Google",
 	})
 }
@@ -123,7 +125,50 @@ func loginHandler(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Set("state", state)
 	session.Save()
-	c.Writer.Write([]byte("<html><title>Golang Google</title> <body> <a href='" + getLoginURL(state) + "'><button>Login with Google!</button> </a> </body></html>"))
+	c.HTML(http.StatusOK, "login.html", gin.H{
+		"linkToGo": getLoginURL(state),
+	})
+}
+
+func remoteVerifyTokenHandler(c *gin.Context) {
+
+	idToken := c.Query("idToken")
+
+	oauth2Service, err := goauth.New(&http.Client{})
+	tokenInfoCall := oauth2Service.Tokeninfo()
+	tokenInfoCall.IdToken(idToken)
+	tokenInfo, err := tokenInfoCall.Do()
+	if err != nil {
+		log.Printf("error to verify : %+v", err)
+		c.Status(http.StatusFailedDependency)
+		return
+	}
+	log.Printf("Success: %+v", tokenInfo)
+
+	c.Status(http.StatusAccepted)
+}
+
+func localVerifyTokenHandler(c *gin.Context) {
+	v := googleAuthIDTokenVerifier.Verifier{}
+	aud := setup.Cid
+	idToken := c.Query("idToken")
+	err := v.VerifyIDToken(idToken, []string{aud})
+	if err != nil {
+		log.Printf("error to verify : %+v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	claimSet, err := googleAuthIDTokenVerifier.Decode(idToken)
+	if err != nil {
+		log.Printf("error decoding token : %+v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	// claimSet.Iss,claimSet.Email ... (See claimset.go)
+	log.Printf("Success: %+v", claimSet)
+
+	c.Status(http.StatusAccepted)
 }
 
 func main() {
@@ -136,6 +181,8 @@ func main() {
 	router.GET("/", indexHandler)
 	router.GET("/login", loginHandler)
 	router.GET("/auth", authHandler)
+	router.GET("/remote_verify", remoteVerifyTokenHandler)
+	router.GET("/local_verify", localVerifyTokenHandler)
 
 	router.Run("127.0.0.1:9090")
 }
